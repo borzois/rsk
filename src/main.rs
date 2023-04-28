@@ -1,16 +1,35 @@
 use std::env;
+use std::collections::{HashMap, HashSet};
 
 use serenity::async_trait;
 use serenity::prelude::*;
 use serenity::model::channel::Message;
 use serenity::model::event::ResumedEvent;
 use serenity::model::gateway::Ready;
-use serenity::framework::standard::macros::{command, group, hook};
-use serenity::framework::standard::{StandardFramework, CommandResult};
+use serenity::model::id::UserId;
+
+use serenity::framework::standard::macros::{command, group, hook, help};
+use serenity::framework::standard::{
+    help_commands,
+    Args,
+    CommandGroup,
+    CommandOptions,
+    CommandResult,
+    DispatchError,
+    HelpOptions,
+    Reason,
+    StandardFramework,
+};
+
 use serenity::prelude::*;
+
 use tracing::*;
 use tracing_subscriber;
 
+mod commands;
+use crate::commands::misc::*;
+use crate::commands::booru::*;
+use crate::commands::voice::*;
 
 #[hook]
 #[instrument]
@@ -21,8 +40,16 @@ async fn before(_: &Context, msg: &Message, command_name: &str) -> bool {
 }
 
 #[group]
-#[commands(ping)]
+#[commands(ping, multiply)]
 struct General;
+
+#[group]
+#[commands(booru)]
+struct Booru;
+
+#[group]
+#[commands(play)]
+struct Voice;
 
 struct Handler;
 
@@ -38,6 +65,28 @@ impl EventHandler for Handler {
     }
 }
 
+#[help]
+#[individual_command_tip = "let me know if you want more information about a specific command"]
+#[command_not_found_text = "could not find: `{}`."]
+#[max_levenshtein_distance(3)]
+#[indention_prefix = "+"]
+#[lacking_permissions = "Hide"]
+#[lacking_role = "Nothing"]
+#[wrong_channel = "Nothing"]
+
+async fn my_help(
+    context: &Context,
+    msg: &Message,
+    args: Args,
+    help_options: &'static HelpOptions,
+    groups: &[&'static CommandGroup],
+    owners: HashSet<UserId>,
+) -> CommandResult {
+    let _ = help_commands::with_embeds(context, msg, args, help_options, groups, owners).await;
+    Ok(())
+}
+
+
 #[tokio::main]
 #[instrument]
 async fn main() {
@@ -46,7 +95,10 @@ async fn main() {
     let framework = StandardFramework::new()
         .configure(|c| c.prefix(">"))
         .before(before)
-        .group(&GENERAL_GROUP);
+        .group(&GENERAL_GROUP)
+        .group(&BOORU_GROUP)
+        .group(&VOICE_GROUP)
+        .help(&MY_HELP);
 
     // Login with a bot token from the environment
     let token = env::var("DISCORD_TOKEN").expect("token");
@@ -61,11 +113,4 @@ async fn main() {
     if let Err(why) = client.start().await {
         println!("An error occurred while running the client: {:?}", why);
     }
-}
-
-#[command]
-async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
-    msg.reply(ctx, "Pong!").await?;
-
-    Ok(())
 }
