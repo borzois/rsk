@@ -14,10 +14,12 @@ use tracing::error;
 #[command]
 pub async fn booru(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let mut _posts = GelbooruClient::builder();
+
     while !args.is_empty() {
         _posts = _posts
             .tag(args.single::<String>()?);
     }
+
     let _posts = _posts
         .rating(GelbooruRating::General)
         .sort(GelbooruSort::Score)
@@ -26,17 +28,32 @@ pub async fn booru(ctx: &Context, msg: &Message, mut args: Args) -> CommandResul
         .blacklist_tag(GelbooruRating::Explicit)
         .get()
         .await;
-        // .expect("There was an error retrieving posts from the API");
 
     match _posts {
         Ok(posts) => {
-            for val in posts.iter(){
-                let response = &val.file_url;
-                msg.channel_id.say(&ctx.http, response).await?;
+            for val in posts.iter() {
+                msg
+                    .channel_id
+                    .send_message(&ctx.http, |m| { m
+                        .embed(|e| { e
+                                .title(&val.source)
+                                .description(&val.tags)
+                                .image(&val.file_url)
+                        })
+                    })
+                    .await?;
             }
         },
         Err(error) => {
-            msg.channel_id.say(&ctx.http,"i couldn't find that!").await?;
+            msg
+                .channel_id
+                .send_message(&ctx.http,|m| { m
+                    .embed(|e| { e
+                        .image("https://i.guim.co.uk/img/media/d82ea2d029ea86532dc4a37ea920540065cd35b2/0_59_4000_2400/master/4000.jpg?width=1200&height=1200&quality=85&auto=format&fit=crop&s=7fc5febdff3241661f172fb216df523a")
+                        .description("i couldn't find anything")
+                    })
+                })
+                .await?;
             error!("{}", error.to_string())
         }
     }
